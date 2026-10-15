@@ -1,102 +1,134 @@
+import React, { useEffect, useState } from "react";
+import AdminDashboard from "./AdminDashboard";
+import LoginPage from "./LoginPage";
 import Register from "./Register";
-import React, { useState } from "react";
+import StaffDashboard from "./StaffDashboard";
 import StudentDashboard from "./StudentDashboard";
+import WelcomePage from "./WelcomePage";
+import API_BASE_URL, { authenticatedFetch } from "./api";
+import { clearAuthentication } from "./auth";
 import "./App.css";
 
-function App() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-if (window.location.pathname === "/register") {
-  return <Register />;
-}
-  if (window.location.pathname === "/student") {
-    return <StudentDashboard />;
-  }
+const DASHBOARDS = {
+  "/student": { role: "STUDENT", component: StudentDashboard },
+  "/staff": { role: "STAFF", component: StaffDashboard },
+  "/admin": { role: "ADMIN", component: AdminDashboard },
+};
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
-    setMessage("Signing in...");
+function ProtectedDashboard({ role, Dashboard }) {
+  const [state, setState] = useState("checking");
 
-    try {
-      const response = await fetch("http://localhost:8080/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ username, password }),
+  useEffect(() => {
+    let active = true;
+    const token = localStorage.getItem("accessToken");
+
+    if (!token) {
+      setState("denied");
+      return () => {
+        active = false;
+      };
+    }
+
+    authenticatedFetch(`${API_BASE_URL}/api/me`)
+      .then(async (response) => {
+        if (!response.ok) {
+          if (response.status === 401) {
+            clearAuthentication();
+          }
+          throw new Error(
+            response.status === 401 || response.status === 403
+              ? "denied"
+              : "unavailable"
+          );
+        }
+
+        const user = await response.json();
+        if (
+          user.role !== role ||
+          user.role !== localStorage.getItem("role")
+        ) {
+          throw new Error("denied");
+        }
+
+        if (active) {
+          setState("authorized");
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setState(error.message === "denied" ? "denied" : "unavailable");
+        }
       });
 
-      const data = await response.json();
+    return () => {
+      active = false;
+    };
+  }, [role]);
 
-      if (response.ok && data.accessToken) {
-        localStorage.setItem("accessToken", data.accessToken);
-        localStorage.setItem("refreshToken", data.refreshToken);
-        localStorage.setItem("username", username);
-        window.location.href = "/student";
-      } else {
-        setMessage("Invalid username or password.");
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage("Unable to connect to backend.");
-    }
-  };
+  if (state === "checking") {
+    return <main className="access-denied">Verifying your account...</main>;
+  }
 
-  return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-brand">
-          <div className="login-logo">🏫</div>
-          <h1>CampusCare</h1>
-          <p>College Maintenance Request System</p>
+  if (state === "unavailable") {
+    return (
+      <main className="access-denied">
+        <div className="access-denied-card">
+          <h1>Unable to verify your account</h1>
+          <p>Please check your connection and try again.</p>
         </div>
+      </main>
+    );
+  }
 
-        <div className="login-content">
-          <h2>Welcome Back!</h2>
-          <p className="login-subtitle">
-            Sign in to access your student account.
+  if (state !== "authorized") {
+    return (
+      <main className="access-denied">
+        <div className="access-denied-card">
+          <span className="access-denied-icon" aria-hidden="true">🔒</span>
+          <h1>Sign in required</h1>
+          <p>
+            Please sign in with the correct account before opening this
+            dashboard.
           </p>
-
-          <form onSubmit={handleLogin}>
-            <label htmlFor="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            <button type="submit" className="login-submit">
-              Sign In
-            </button>
-          </form>
-
-          {message && <p className="login-message">{message}</p>}
-
-          <p className="register-link">
-            New student? <a href="/register">Create an account</a>
-          </p>
+          <a className="primary-button access-home-link" href="/">
+            Back to welcome page
+          </a>
         </div>
+      </main>
+    );
+  }
 
-        <p className="login-footer">
-          CampusCare · Making our campus better
-        </p>
-      </div>
-    </div>
-  );
+  return <Dashboard />;
+}
+
+function App() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const dashboard = DASHBOARDS[path];
+
+  if (dashboard) {
+    const Dashboard = dashboard.component;
+    return <ProtectedDashboard role={dashboard.role} Dashboard={Dashboard} />;
+  }
+
+  if (path === "/login/student") {
+    return <LoginPage role="STUDENT" />;
+  }
+  if (path === "/login/staff") {
+    return <LoginPage role="STAFF" />;
+  }
+  if (path === "/login/admin") {
+    return <LoginPage role="ADMIN" />;
+  }
+  if (path === "/register") {
+    return <Register />;
+  }
+
+  if (path === "/login") {
+    window.location.replace("/");
+    return null;
+  }
+
+  return <WelcomePage />;
 }
 
 export default App;

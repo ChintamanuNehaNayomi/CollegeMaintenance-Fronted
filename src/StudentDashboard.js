@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import MaintenanceRequest from "./MaintenanceRequest";
 import MyRequests from "./MyRequests";
+import { clearAuthentication } from "./auth";
 import "./App.css";
 
 function StudentDashboard() {
@@ -9,9 +10,7 @@ function StudentDashboard() {
   const [showMyRequests, setShowMyRequests] = useState(false);
 
   const logout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("username");
+    clearAuthentication();
     window.location.href = "/";
   };
 

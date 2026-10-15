@@ -1,10 +1,11 @@
-
 import React, { useEffect, useState } from "react";
+import API_BASE_URL, { authenticatedFetch } from "./api";
 import "./App.css";
 
 function MyRequests() {
   const [requests, setRequests] = useState([]);
   const [message, setMessage] = useState("Loading your requests...");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const username = localStorage.getItem("username");
@@ -12,44 +13,47 @@ function MyRequests() {
 
     if (!username || !token) {
       setMessage("Please sign in to view your requests.");
+      setLoading(false);
       return;
     }
 
-    fetch(
-      `http://localhost:8080/api/requests/${encodeURIComponent(username)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    )
-      .then(async (response) => {
+    const loadRequests = async () => {
+      try {
+        const response = await authenticatedFetch(
+          `${API_BASE_URL}/api/requests/${encodeURIComponent(username)}`
+        );
+
         if (!response.ok) {
-          throw new Error(`Request failed (${response.status})`);
+          setMessage(
+            response.status === 403
+              ? "You can only view your own requests."
+              : `Unable to load requests (error ${response.status}).`
+          );
+          return;
         }
-        return response.json();
-      })
-      .then((data) => {
+
+        const data = await response.json();
         if (!Array.isArray(data)) {
-          throw new Error("Unexpected response from server.");
+          setMessage("The server returned an unexpected response.");
+          return;
         }
 
         setRequests(data);
         setMessage(
-          data.length === 0 ? "No maintenance requests found." : ""
+          data.length === 0 ? "You have not submitted any requests yet." : ""
         );
-      })
-      .catch((error) => {
-        console.error("Loading requests failed:", error);
-        setMessage(
-          "Unable to load requests. Please check the backend connection and try again."
-        );
-      });
+      } catch {
+        setMessage("Unable to connect to the backend. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRequests();
   }, []);
 
   return (
-    <div className="my-requests-page">
+    <section className="my-requests-page">
       <div className="my-requests-card">
         <h1>My Maintenance Requests</h1>
         <p className="requests-subtitle">
@@ -61,6 +65,7 @@ function MyRequests() {
             {message}
           </p>
         )}
+        {loading && <p className="requests-message">Loading requests...</p>}
 
         {requests.length > 0 && (
           <div className="requests-table-wrapper">
@@ -69,10 +74,10 @@ function MyRequests() {
                 <tr>
                   <th>Category</th>
                   <th>Location</th>
-                  <th>Description</th>
                   <th>Priority</th>
+                  <th>Submitted</th>
                   <th>Status</th>
-                  <th>Date</th>
+                  <th>Description</th>
                 </tr>
               </thead>
               <tbody>
@@ -80,10 +85,14 @@ function MyRequests() {
                   <tr key={request.id}>
                     <td>{request.category}</td>
                     <td>{request.location}</td>
-                    <td>{request.description}</td>
                     <td>{request.priority}</td>
-                    <td>{request.status}</td>
-                    <td>{request.requestDate || "—"}</td>
+                    <td>{request.requestDate || "Not available"}</td>
+                    <td>
+                      <span className={`status-badge status-${(request.status || "").toLowerCase()}`}>
+                        {request.status || "Unknown"}
+                      </span>
+                    </td>
+                    <td>{request.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -91,7 +100,7 @@ function MyRequests() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 

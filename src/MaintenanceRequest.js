@@ -1,5 +1,6 @@
 
 import React, { useState } from "react";
+import API_BASE_URL, { authenticatedFetch } from "./api";
 import "./App.css";
 
 function MaintenanceRequest() {
@@ -22,18 +23,13 @@ function MaintenanceRequest() {
     };
 
     try {
-      const response = await fetch(
-        "http://localhost:8080/api/requests",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization:
-              "Bearer " + localStorage.getItem("accessToken"),
-          },
-          body: JSON.stringify(requestData),
-        }
-      );
+      const response = await authenticatedFetch(`${API_BASE_URL}/api/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
+      });
 
       if (!response.ok) {
         setMessage("Request failed. Please check your login and try again.");
